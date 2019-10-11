@@ -10,8 +10,14 @@ RADAR = 2
 TRAP = 3
 ORE = 4
 
+
+debug_flag = True
 def debug(msg):
-    print(msg, file=sys.stderr)
+    if debug_flag:
+        print(msg, file=sys.stderr)
+def debugnnl(msg):
+    if debug_flag:
+        print(msg, file=sys.stderr, end='')
 
 class Pos:
     def __init__(self, x, y):
@@ -34,21 +40,27 @@ class Robot(Entity):
         super().__init__(x, y, type, id)
         self.item = item
         self._cmdstr = None
+        self.prospect = None
 
     def is_dead(self):
         return self.x == -1 and self.y == -1
 
+    def update(self, x, y, item):
+        self.x = x
+        self.y = y
+        self.item = item
+
     def _cmd(self, new_cmd, message=None):
         self._cmdstr = new_cmd + (" # " + message if message else "") + (" ; " + self._cmdstr if self._cmdstr else "")
 
-    def move(self, x, y, message=None):
-        self._cmd(f"MOVE {x} {y}", message)
+    def move(self, pos, message=None):
+        self._cmd(f"MOVE {pos.x} {pos.y}", message)
 
     def wait(self, message=None):
         self._cmd(f"WAIT", message)
 
-    def dig(self, x, y, message=None):
-        self._cmd(f"DIG {x} {y}", message)
+    def dig(self, pos, message=None):
+        self._cmd(f"DIG {pos.x} {pos.y}", message)
 
     def radar(self, message=None):
         self._cmd("REQUEST RADAR", message)
@@ -57,7 +69,11 @@ class Robot(Entity):
         self._cmd(f"REQUEST TRAP", message)
 
     def do(self):
+        if not self._cmdstr:
+            self.wait("default") # dead bot?
         print(self._cmdstr)
+        self._cmdstr = None
+
 
 class Cell(Pos):
     def __init__(self, x, y, ore, hole):
@@ -69,9 +85,29 @@ class Cell(Pos):
         return self.hole == HOLE
 
     def update(self, ore, hole):
-        self.ore = ore
-        self.hole = hole
+        self.ore = int(ore) if ore != '?' else -1
+        self.hole = int(hole)
+        self.bot = None
+        self.enemy = None
+        self.trap = None
+        self.radar = None
 
+    def place(self, entity):
+        if entity.type == ROBOT_ALLY:
+            self.bot = entity
+        elif entity.type == ROBOT_ENEMY:
+            self.enemy = entity
+        elif entity.type == TRAP:
+            self.trap = entity
+        elif entity.type == RADAR:
+            self.radar = entity
+
+    def draw(self):
+        debugnnl("{}{}{}{}{},".format(self.ore if self.ore >= 0 else ' ',
+                                           '!' if self.hole else ' ',
+                                           'B' if self.bot else ' ',
+                                           'R' if self.radar else ' ',
+                                           'T' if self.trap else ' '))
 
 class Grid:
     def __init__(self, width, height):
@@ -82,10 +118,16 @@ class Grid:
         self.width = width
         self.height = height
 
-    def get_cell(self, x, y):
+    def cell(self, x, y):
         if self.width > x >= 0 and self.height > y >= 0:
             return self.cells[x + self.width * y]
         return None
+
+    def draw(self):
+         for i in range(self.height):
+            for j in range(self.width):
+                self.cell(j, i).draw()
+            debug("") # for newline
 
 
 class Game:
@@ -99,8 +141,12 @@ class Game:
         self.turn = 0
         self.radars = []
         self.traps = []
-        self.my_robots = []
-        self.enemy_robots = []
+        self.bots = []
+        self.enemies = []
+        self.prospection = [(width//2-6, height//2),   (width//2-3, height//2-3), (width//2-3, height//2+3),
+                            (width//2,   height//2),   (width//2,   height//2-6), (width//2,   height//2+6),
+                            (width//2+3, height//2-3), (width//2+3, height//2+3), (width//2+6, height//2)]
+        self.prospecting = True
 
     def see(self):
         # my_score: Players score
@@ -112,7 +158,7 @@ class Game:
                 # hole: 1 if cell has a hole
                 ore = inputs[2 * j]
                 hole = int(inputs[2 * j + 1])
-                self.grid.get_cell(j, i).update(ore, hole)
+                self.grid.cell(j, i).update(ore, hole)
         # entity_count: number of entities visible to you
         # radar_cooldown: turns left until a new radar can be requested
         # trap_cooldown: turns left until a new trap can be requested
@@ -120,8 +166,7 @@ class Game:
 
         self.radars = []
         self.traps = []
-        self.my_robots = []
-        self.enemy_robots = []
+        self.enemies = []
 
         for i in range(entity_count):
             # id: unique id of the entity
@@ -131,33 +176,78 @@ class Game:
             id, type, x, y, item = [int(j) for j in input().split()]
 
             if type == ROBOT_ALLY:
-                self.my_robots.append(Robot(x, y, type, id, item))
+                for bot in self.bots:
+                    if id == bot.id:
+                        bot.update(x, y, item)
+                        self.grid.cell(x,y).place(bot)
+                        break
+                else:
+                    bot = Robot(x, y, type, id, item)
+                    self.bots.append(bot)
+                    self.grid.cell(x,y).place(bot)
             elif type == ROBOT_ENEMY:
-                self.enemy_robots.append(Robot(x, y, type, id, item))
+                bot = Robot(x, y, type, id, item)
+                self.enemies.append(bot)
+                self.grid.cell(x,y).place(bot)
             elif type == TRAP:
-                self.traps.append(Entity(x, y, type, id))
+                entity = Entity(x, y, type, id)
+                self.traps.append(entity)
+                self.grid.cell(x,y).place(entity)
             elif type == RADAR:
-                self.radars.append(Entity(x, y, type, id))
+                entity = Entity(x, y, type, id)
+                self.radars.append(entity)
+                self.grid.cell(x,y).place(entity)
+            
+
+
+        debug(f" -- score: {self.my_score} - {self.enemy_score} radar in: {self.radar_cooldown} trap in: {self.trap_cooldown}")
+        self.grid.draw()
+        
 
     def think(self):
-        for i in range(len(self.my_robots)):
-            # Write an action using print
-            # To debug: print("Debug messages...", file=sys.stderr)
+        if self.radar_cooldown < 2 and len(self.prospection) > 0 and self.prospecting:
+            # choose bot nearest hq as prospector
+            radar_coor = self.prospection.pop(0)
+            radar_pos = Pos(radar_coor[0], radar_coor[1])
+            headq_pos = Pos(0, radar_coor[1])
+            for bot, _ in sorted([(bot, bot.distance(headq_pos)) for bot in self.bots], key=lambda x: x[1]):
+                if bot.item != RADAR and bot.item != TRAP:
+                    bot.prospect = (radar_pos, headq_pos)
+                    self.prospecting = False # pause prospecting until radar is placed
+                    break
+            else:
+                self.prospection.append(radar_coor) # give back
+        for x in range(len(self.grid))
 
-            # WAIT|
-            # MOVE x y|REQUEST item
-            self.my_robots[i].wait(f"Starter AI {i}")
-            self.my_robots[i].radar(f"Gaydar {i}")
-            self.my_robots[i].trap(f"Its a Trap! {i}")
+        for i, bot in enumerate(self.bots):
+            if bot.prospect:
+                if bot.x == 0 and self.radar_cooldown == 0:
+                    bot.radar()
+                elif bot.item == RADAR:
+                    distance = bot.distance(bot.prospect[0])
+                    if distance <= 1:
+                        bot.dig(bot.prospect[0], "bot {} set radar {}".format(bot.id, len(self.radars)))
+                        bot.prospect = None
+                        self.prospecting = True
+                    else:
+                        left = Pos(bot.prospect[0].x-1, bot.prospect[0].y)
+                        distance = bot.distance(left)
+                        bot.move(left, "bot {} moving left of radar dest".format(bot.id))
+                else:
+                    distance = bot.distance(bot.prospect[1])
+                    if distance <= 4:
+                        bot.move(bot.prospect[1], "bot {} moving straight to hq")
+                    elif self.radar_cooldown == 1 and bot.x <= 4:
+                        left = Pos(0, bot.y)
+                        bot.move(left, "bot {} moving left to hq")
+                    else:
+                        bot.move(bot.prospect[1], "bot {} moving slowly to hq")
+
+            
 
     def do(self):
-        for i in range(len(self.my_robots)):
-            # Write an action using print
-            # To debug: print("Debug messages...", file=sys.stderr)
-
-            # WAIT|
-            # MOVE x y|REQUEST item
-            self.my_robots[i].do()
+        for bot in self.bots:
+            bot.do()
         # Advance turn
         self.turn = self.turn + 1
 
