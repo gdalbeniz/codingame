@@ -1,5 +1,6 @@
 import sys
 import math
+import random
 
 
 NONE = -1
@@ -10,6 +11,8 @@ RADAR = 2
 TRAP = 3
 ORE = 4
 
+# FUCK!
+width, height = [int(i) for i in input().split()]
 
 debug_flag = True
 def debug(msg):
@@ -21,11 +24,24 @@ def debugnnl(msg):
 
 class Pos:
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
+        if x < 0:
+            self.x = 0
+        elif x >= width:
+            self.x = width - 1
+        else:
+            self.x = x
+        if y < 0:
+            self.y = 0
+        elif y >= height:
+            self.y = height - 1
+        else:
+            self.y = y
 
     def distance(self, pos):
         return abs(self.x - pos.x) + abs(self.y - pos.y)
+    
+    def delta(self, x, y):
+        return Pos(self.x+x, self.y+y)
 
 
 class Entity(Pos):
@@ -76,17 +92,19 @@ class Robot(Entity):
 
 
 class Cell(Pos):
-    def __init__(self, x, y, ore, hole):
+    def __init__(self, x, y):
         super().__init__(x, y)
-        self.ore = ore
-        self.hole = hole
+        self.ore = 0
+        self.hole = 0
 
     def has_hole(self):
-        return self.hole == HOLE
+        return self.hole > 0
+    def has_ore(self):
+        return self.ore > 0
 
     def update(self, ore, hole):
-        self.ore = int(ore) if ore != '?' else -1
-        self.hole = int(hole)
+        self.ore = ore
+        self.hole = hole
         self.bot = None
         self.enemy = None
         self.trap = None
@@ -114,7 +132,7 @@ class Grid:
         self.cells = []
         for y in range(height):
             for x in range(width):
-                self.cells.append(Cell(x, y, 0, 0))
+                self.cells.append(Cell(x, y))
         self.width = width
         self.height = height
 
@@ -122,17 +140,18 @@ class Grid:
         if self.width > x >= 0 and self.height > y >= 0:
             return self.cells[x + self.width * y]
         return None
+    def cellpos(self, pos):
+        return self.cell(pos.x, pos.y)
 
     def draw(self):
-         for i in range(self.height):
-            for j in range(self.width):
-                self.cell(j, i).draw()
-            debug("") # for newline
+        for y in range(self.height):
+            for x in range(self.width):
+                self.cell(x, y).draw()
+            debug(f" # {y}") # for newline
 
 
 class Game:
     def __init__(self):
-        width, height = [int(i) for i in input().split()]
         self.grid = Grid(width, height)
         self.my_score = 0
         self.enemy_score = 0
@@ -143,12 +162,21 @@ class Game:
         self.traps = []
         self.bots = []
         self.enemies = []
-        self.prospection = [(width//2-6, height//2),   (width//2-3, height//2-3), (width//2-3, height//2+3),
-                            (width//2,   height//2),   (width//2,   height//2-6), (width//2,   height//2+6),
-                            (width//2+3, height//2-3), (width//2+3, height//2+3), (width//2+6, height//2)]
+        self.prospection = [( 5, 3), (10, 7), ( 5,11),
+                            (13, 3), (18, 7), (13,11),
+                            (21, 3), (26, 7), (21,11),]
+                            #(26, 4), (21, 8), (26,12),
+                            #(18, 4), (13, 8), (18,12),
+                            #(10, 4), ( 5, 8), (10,12),]
         self.prospecting = True
 
     def see(self):
+        # reset
+        self.oreseen = 0
+        self.radars = []
+        self.traps = []
+        self.enemies = []
+
         # my_score: Players score
         self.my_score, self.enemy_score = [int(i) for i in input().split()]
         for i in range(self.grid.height):
@@ -156,17 +184,15 @@ class Game:
             for j in range(self.grid.width):
                 # ore: amount of ore or "?" if unknown
                 # hole: 1 if cell has a hole
-                ore = inputs[2 * j]
+                ore = int(inputs[2 * j]) if inputs[2 * j] != '?' else -1
                 hole = int(inputs[2 * j + 1])
                 self.grid.cell(j, i).update(ore, hole)
+                if ore > 0:
+                    self.oreseen = self.oreseen + ore
         # entity_count: number of entities visible to you
         # radar_cooldown: turns left until a new radar can be requested
         # trap_cooldown: turns left until a new trap can be requested
         entity_count, self.radar_cooldown, self.trap_cooldown = [int(i) for i in input().split()]
-
-        self.radars = []
-        self.traps = []
-        self.enemies = []
 
         for i in range(entity_count):
             # id: unique id of the entity
@@ -179,7 +205,8 @@ class Game:
                 for bot in self.bots:
                     if id == bot.id:
                         bot.update(x, y, item)
-                        self.grid.cell(x,y).place(bot)
+                        if self.grid.cell(x,y):
+                            self.grid.cell(x,y).place(bot)
                         break
                 else:
                     bot = Robot(x, y, type, id, item)
@@ -188,7 +215,8 @@ class Game:
             elif type == ROBOT_ENEMY:
                 bot = Robot(x, y, type, id, item)
                 self.enemies.append(bot)
-                self.grid.cell(x,y).place(bot)
+                if self.grid.cell(x,y):
+                    self.grid.cell(x,y).place(bot)
             elif type == TRAP:
                 entity = Entity(x, y, type, id)
                 self.traps.append(entity)
@@ -198,10 +226,9 @@ class Game:
                 self.radars.append(entity)
                 self.grid.cell(x,y).place(entity)
             
-
-
         debug(f" -- score: {self.my_score} - {self.enemy_score} radar in: {self.radar_cooldown} trap in: {self.trap_cooldown}")
-        self.grid.draw()
+        if self.turn % 10 == 0:
+            self.grid.draw()
         
 
     def think(self):
@@ -217,31 +244,151 @@ class Game:
                     break
             else:
                 self.prospection.append(radar_coor) # give back
-        for x in range(len(self.grid))
+        #for x in range(len(self.grid))
 
-        for i, bot in enumerate(self.bots):
-            if bot.prospect:
+        for bot in self.bots:
+            if bot.is_dead():
+                # bot is dead
+                bot.wait("dead")
+            elif bot.prospect:
+                # get radar from hq and place it
                 if bot.x == 0 and self.radar_cooldown == 0:
                     bot.radar()
                 elif bot.item == RADAR:
                     distance = bot.distance(bot.prospect[0])
                     if distance <= 1:
-                        bot.dig(bot.prospect[0], "bot {} set radar {}".format(bot.id, len(self.radars)))
+                        bot.dig(bot.prospect[0], f"bot {bot.id} set radar {len(self.radars)}")
                         bot.prospect = None
                         self.prospecting = True
                     else:
-                        left = Pos(bot.prospect[0].x-1, bot.prospect[0].y)
-                        distance = bot.distance(left)
-                        bot.move(left, "bot {} moving left of radar dest".format(bot.id))
+                        bot.move(bot.prospect[0].delta(-1, 0), f"bot {bot.id} moving left of radar dest")
                 else:
                     distance = bot.distance(bot.prospect[1])
                     if distance <= 4:
-                        bot.move(bot.prospect[1], "bot {} moving straight to hq")
+                        bot.move(bot.prospect[1], f"bot {bot.id} moving straight to hq")
                     elif self.radar_cooldown == 1 and bot.x <= 4:
-                        left = Pos(0, bot.y)
-                        bot.move(left, "bot {} moving left to hq")
+                        bot.move(bot.delta(-4, 0), f"bot {bot.id} moving left to hq")
                     else:
-                        bot.move(bot.prospect[1], "bot {} moving slowly to hq")
+                        bot.move(bot.prospect[1], f"bot {bot.id} moving slowly to hq")
+            elif bot.item == ORE:
+                # take ore to hq
+                bot.move(bot.delta(-5, 0))
+            elif self.grid.cellpos(bot.delta(1, 0)).has_ore():
+                # mine right
+                bot.dig(bot.delta(1, 0))
+            elif self.grid.cellpos(bot).has_ore():
+                # mine here
+                bot.dig(bot)
+            elif self.grid.cellpos(bot.delta(0, 1)).has_ore():
+                # mine below
+                bot.dig(bot.delta(0, 1))
+            elif self.grid.cellpos(bot.delta(0, -1)).has_ore():
+                # mine above
+                bot.dig(bot.delta(0, -1))
+            elif self.grid.cellpos(bot.delta(-1, 0)).has_ore():
+                # mine left
+                bot.dig(bot.delta(-1, 0))
+            else:
+                # move to nearest vein
+                vein = None
+                for x in range(2, bot.x):
+                    # seek left
+                    if self.grid.cellpos(bot.delta(-x, 0)).has_ore():
+                        vein = bot.delta(-x, 0)
+                    elif self.grid.cellpos(bot.delta(-x, -1)).has_ore():
+                        vein = bot.delta(-x, -1)
+                    elif self.grid.cellpos(bot.delta(-x, 1)).has_ore():
+                        vein = bot.delta(-x, 1)
+                    elif self.grid.cellpos(bot.delta(-x, -2)).has_ore():
+                        vein = bot.delta(-x, -2)
+                    elif self.grid.cellpos(bot.delta(-x, 2)).has_ore():
+                        vein = bot.delta(-x, 2)
+                    if vein:
+                        bot.move(vein, "seeking left")
+                        break
+                for x in range(2, bot.x):
+                    if vein:
+                        break
+                    # seek left up
+                    elif self.grid.cellpos(bot.delta(-x, -3)).has_ore():
+                        vein = bot.delta(-x, -3)
+                    elif self.grid.cellpos(bot.delta(-x, -4)).has_ore():
+                        vein = bot.delta(-x, -4)
+                    elif self.grid.cellpos(bot.delta(-x, -5)).has_ore():
+                        vein = bot.delta(-x, -5)
+                    elif self.grid.cellpos(bot.delta(-x, -6)).has_ore():
+                        vein = bot.delta(-x, -6)
+                    if vein:
+                        bot.move(vein, "seeking left up")
+                        break
+                for x in range(2, bot.x):
+                    if vein:
+                        break
+                    # seek left down
+                    elif self.grid.cellpos(bot.delta(-x, 3)).has_ore():
+                        vein = bot.delta(-x, 3)
+                    elif self.grid.cellpos(bot.delta(-x, 4)).has_ore():
+                        vein = bot.delta(-x, 4)
+                    elif self.grid.cellpos(bot.delta(-x, 5)).has_ore():
+                        vein = bot.delta(-x, 5)
+                    elif self.grid.cellpos(bot.delta(-x, 6)).has_ore():
+                        vein = bot.delta(-x, 6)
+                    if vein:
+                        bot.move(vein, "seeking left down")
+                        break
+                for x in range(2, 7):
+                    if vein:
+                        break
+                    # seek right
+                    if self.grid.cellpos(bot.delta(x, 0)).has_ore():
+                        vein = bot.delta(x, 0)
+                    elif self.grid.cellpos(bot.delta(x, -1)).has_ore():
+                        vein = bot.delta(x, -1)
+                    elif self.grid.cellpos(bot.delta(x, 1)).has_ore():
+                        vein = bot.delta(x, 1)
+                    elif self.grid.cellpos(bot.delta(x, -2)).has_ore():
+                        vein = bot.delta(x, -2)
+                    elif self.grid.cellpos(bot.delta(x, 2)).has_ore():
+                        vein = bot.delta(x, 2)
+                    if vein:
+                        bot.move(vein, "seeking right")
+                        break
+                for x in range(2, 7):
+                    if vein:
+                        break
+                    # seek right up
+                    elif self.grid.cellpos(bot.delta(x, -3)).has_ore():
+                        vein = bot.delta(x, -3)
+                    elif self.grid.cellpos(bot.delta(x, -4)).has_ore():
+                        vein = bot.delta(x, -4)
+                    elif self.grid.cellpos(bot.delta(x, -5)).has_ore():
+                        vein = bot.delta(x, -5)
+                    elif self.grid.cellpos(bot.delta(x, -6)).has_ore():
+                        vein = bot.delta(x, -6)
+                    if vein:
+                        bot.move(vein, "seeking right up")
+                        break
+                for x in range(2, 7):
+                    if vein:
+                        break
+                    # seek right down
+                    elif self.grid.cellpos(bot.delta(x, 3)).has_ore():
+                        vein = bot.delta(x, 3)
+                    elif self.grid.cellpos(bot.delta(x, 4)).has_ore():
+                        vein = bot.delta(x, 4)
+                    elif self.grid.cellpos(bot.delta(x, 5)).has_ore():
+                        vein = bot.delta(x, 5)
+                    elif self.grid.cellpos(bot.delta(x, 6)).has_ore():
+                        vein = bot.delta(x, 6)
+                    if vein:
+                        bot.move(vein, "seeking right down")
+                        break
+                if not vein:
+                    # move randomly
+                    bot.move(bot.delta(random.randint(2,5), random.randint(-2,3)))
+                
+                        
+
 
             
 
