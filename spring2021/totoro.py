@@ -1,41 +1,103 @@
 import sys
 import math
+from enum import Enum
+import random
 
-# Auto-generated code below aims at helping you parse
-# the standard input according to the problem statement.
+class Cell:
+    def __init__(self, cell_index, richness, neighbors):
+        self.cell_index = cell_index
+        self.richness = richness
+        self.neighbors = neighbors
 
-number_of_cells = int(input())  # 37
+class Tree:
+    def __init__(self, cell_index, size, is_mine, is_dormant):
+        self.cell_index = cell_index
+        self.size = size
+        self.is_mine = is_mine
+        self.is_dormant = is_dormant
+
+class ActionType(Enum):
+    WAIT = "WAIT"
+    SEED = "SEED"
+    GROW = "GROW"
+    COMPLETE = "COMPLETE"
+
+class Action:
+    def __init__(self, type, target_cell_id=None, origin_cell_id=None):
+        self.type = type
+        self.target_cell_id = target_cell_id
+        self.origin_cell_id = origin_cell_id
+
+    def __str__(self):
+        if self.type == ActionType.WAIT:
+            return 'WAIT'
+        elif self.type == ActionType.SEED:
+            return f'SEED {self.origin_cell_id} {self.target_cell_id}'
+        else:
+            return f'{self.type.name} {self.target_cell_id}'
+
+    @staticmethod
+    def parse(action_string):
+        split = action_string.split(' ')
+        if split[0] == ActionType.WAIT.name:
+            return Action(ActionType.WAIT)
+        if split[0] == ActionType.SEED.name:
+            return Action(ActionType.SEED, int(split[2]), int(split[1]))
+        if split[0] == ActionType.GROW.name:
+            return Action(ActionType.GROW, int(split[1]))
+        if split[0] == ActionType.COMPLETE.name:
+            return Action(ActionType.COMPLETE, int(split[1]))
+
+class Game:
+    def __init__(self):
+        self.day = 0
+        self.nutrients = 0
+        self.board = []
+        self.trees = []
+        self.possible_actions = []
+        self.my_sun = 0
+        self.my_score = 0
+        self.opponents_sun = 0
+        self.opponent_score = 0
+        self.opponent_is_waiting = 0
+
+    def compute_next_action(self):
+        n = random.randrange(0, len(self.possible_actions))
+        return self.possible_actions[n]
+
+
+number_of_cells = int(input())
+game = Game()
 for i in range(number_of_cells):
-    # index: 0 is the center cell, the next cells spiral outwards
-    # richness: 0 if the cell is unusable, 1-3 for usable cells
-    # neigh_0: the index of the neighbouring cell for each direction
-    index, richness, neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5 = [int(j) for j in input().split()]
+    cell_index, richness, neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5 = [int(j) for j in input().split()]
+    game.board.append(Cell(cell_index, richness, [neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5]))
 
-# game loop
 while True:
-    day = int(input())  # the game lasts 24 days: 0-23
-    nutrients = int(input())  # the base score you gain from the next COMPLETE action
-    # sun: your sun points
-    # score: your current score
+    _day = int(input())
+    game.day = _day
+    nutrients = int(input())
+    game.nutrients = nutrients
     sun, score = [int(i) for i in input().split()]
-    inputs = input().split()
-    opp_sun = int(inputs[0])  # opponent's sun points
-    opp_score = int(inputs[1])  # opponent's score
-    opp_is_waiting = inputs[2] != "0"  # whether your opponent is asleep until the next day
-    number_of_trees = int(input())  # the current amount of trees
+    game.my_sun = sun
+    game.my_score = score
+    opp_sun, opp_score, opp_is_waiting = [int(i) for i in input().split()]
+    game.opponent_sun = opp_sun
+    game.opponent_score = opp_score
+    game.opponent_is_waiting = opp_is_waiting
+    number_of_trees = int(input())
+    game.trees.clear()
     for i in range(number_of_trees):
         inputs = input().split()
-        cell_index = int(inputs[0])  # location of this tree
-        size = int(inputs[1])  # size of this tree: 0-3
-        is_mine = inputs[2] != "0"  # 1 if this is your tree
-        is_dormant = inputs[3] != "0"  # 1 if this tree is dormant
-    number_of_possible_actions = int(input())  # all legal actions
+        cell_index = int(inputs[0])
+        size = int(inputs[1])
+        is_mine = inputs[2] != "0"
+        is_dormant = inputs[3] != "0"
+        game.trees.append(Tree(cell_index, size, is_mine == 1, is_dormant))
+
+    number_of_possible_actions = int(input())
+    game.possible_actions.clear()
     for i in range(number_of_possible_actions):
-        possible_action = input()  # try printing something from here to start with
+        possible_action = input()
+        game.possible_actions.append(Action.parse(possible_action))
 
-    # Write an action using print
-    # To debug: print("Debug messages...", file=sys.stderr, flush=True)
-
-
-    # GROW cellIdx | SEED sourceIdx targetIdx | COMPLETE cellIdx | WAIT <message>
-    print("WAIT")
+    print(game.compute_next_action())
