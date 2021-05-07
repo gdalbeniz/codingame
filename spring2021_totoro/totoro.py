@@ -3,11 +3,16 @@ import math
 from enum import Enum
 import random
 
+
+def debug(msg):
+    print(msg, file=sys.stderr)
+
 class Cell:
     def __init__(self, cell_index, richness, neighbors):
         self.cell_index = cell_index
         self.richness = richness
         self.neighbors = neighbors
+        debug(f"CELL {self.cell_index} rich {self.richness} {self.neighbors}")
 
 class Tree:
     def __init__(self, cell_index, size, is_mine, is_dormant):
@@ -15,6 +20,7 @@ class Tree:
         self.size = size
         self.is_mine = is_mine
         self.is_dormant = is_dormant
+        debug(f"TREE {self.cell_index} sz {self.size} mine {self.is_mine} dorm {self.is_dormant}")
 
 class ActionType(Enum):
     WAIT = "WAIT"
@@ -27,14 +33,22 @@ class Action:
         self.type = type
         self.target_cell_id = target_cell_id
         self.origin_cell_id = origin_cell_id
+        if self.type == ActionType.WAIT:
+            self.astr = 'WAIT'
+            self.score = 0
+        elif self.type == ActionType.SEED:
+            self.astr = f'SEED {self.origin_cell_id} {self.target_cell_id}'
+            self.score = 1
+        elif self.type == ActionType.GROW:
+            self.astr = f'{self.type.name} {self.target_cell_id}'
+            self.score = 2
+        elif self.type == ActionType.COMPLETE:
+            self.astr = f'{self.type.name} {self.target_cell_id}'
+            self.score = 3
+        debug(f"ACTION {self.astr} sc {self.score}")
 
     def __str__(self):
-        if self.type == ActionType.WAIT:
-            return 'WAIT'
-        elif self.type == ActionType.SEED:
-            return f'SEED {self.origin_cell_id} {self.target_cell_id}'
-        else:
-            return f'{self.type.name} {self.target_cell_id}'
+        return self.astr
 
     @staticmethod
     def parse(action_string):
@@ -54,50 +68,35 @@ class Game:
         self.nutrients = 0
         self.board = []
         self.trees = []
-        self.possible_actions = []
-        self.my_sun = 0
-        self.my_score = 0
-        self.opponents_sun = 0
-        self.opponent_score = 0
-        self.opponent_is_waiting = 0
+        self.actions = []
+        self.sun = 0
+        self.score = 0
+        self.op_sun = 0
+        self.op_score = 0
+        self.op_waiting = 0
+        for i in range(int(input())):
+            cell, richness, neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5 = [int(j) for j in input().split()]
+            self.board.append(Cell(cell, richness, [neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5]))
 
     def compute_next_action(self):
-        n = random.randrange(0, len(self.possible_actions))
-        return self.possible_actions[n]
+        return self.actions[0]
 
+    def read_input(self):
+        self.day = int(input())
+        self.nutrients = int(input())
+        self.sun, self.score = [int(i) for i in input().split()]
+        self.op_sun, self.op_score, self.op_waiting = [int(i) for i in input().split()]
+        self.trees.clear()
+        for i in range(int(input())):
+            cell, size, mine, dormant = [int(i) for i in input().split()]
+            self.trees.append(Tree(cell, size, mine, dormant))
+        self.actions.clear()
+        for i in range(int(input())):
+            self.actions.append(Action.parse(input()))
+        self.actions.sort(key=lambda a: a.score, reverse=True)
 
-number_of_cells = int(input())
 game = Game()
-for i in range(number_of_cells):
-    cell_index, richness, neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5 = [int(j) for j in input().split()]
-    game.board.append(Cell(cell_index, richness, [neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5]))
 
 while True:
-    _day = int(input())
-    game.day = _day
-    nutrients = int(input())
-    game.nutrients = nutrients
-    sun, score = [int(i) for i in input().split()]
-    game.my_sun = sun
-    game.my_score = score
-    opp_sun, opp_score, opp_is_waiting = [int(i) for i in input().split()]
-    game.opponent_sun = opp_sun
-    game.opponent_score = opp_score
-    game.opponent_is_waiting = opp_is_waiting
-    number_of_trees = int(input())
-    game.trees.clear()
-    for i in range(number_of_trees):
-        inputs = input().split()
-        cell_index = int(inputs[0])
-        size = int(inputs[1])
-        is_mine = inputs[2] != "0"
-        is_dormant = inputs[3] != "0"
-        game.trees.append(Tree(cell_index, size, is_mine == 1, is_dormant))
-
-    number_of_possible_actions = int(input())
-    game.possible_actions.clear()
-    for i in range(number_of_possible_actions):
-        possible_action = input()
-        game.possible_actions.append(Action.parse(possible_action))
-
+    game.read_input()
     print(game.compute_next_action())
