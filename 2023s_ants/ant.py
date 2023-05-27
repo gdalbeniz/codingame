@@ -93,17 +93,16 @@ class Colony:
     def calculate(self):
         # place beacons
         for cell in [c for _,c in self.cells.items() if c.resources > 0]:
-            debug(cell)
-            desired_beacons = cell.resources // (cell.dist + 1)
-            desired_ants = self.num_ants // (cell.dist + 1)
-            cell.place(min(desired_ants, desired_beacons))
+            desired_beacons = self.num_ants // (cell.dist + 1)
+            cell.place(min(cell.resources, desired_beacons))
         # count beacons
         num_beacons = 0
-        cells = [c for _,c in self.cells.items() if c.beacons > 0].sort(key=lambda x: -x.dist)
+        cells = [c for _,c in self.cells.items() if c.beacons > 0]
+        cells.sort(key=lambda x: -x.dist)
         for cell in cells:
             num_beacons += cell.beacons
         
-        debug("beacons pre {}".format(num_beacons))
+        #debug("beacons pre {}".format(num_beacons))
         for cell in cells:
             if num_beacons > self.num_ants:
                 diff = num_beacons - self.num_ants
@@ -111,7 +110,15 @@ class Colony:
                     diff = cell.beacons
                 num_beacons -= diff
                 cell.beacons -= diff
-        debug("beacons post {}".format(num_beacons))
+        #debug("beacons post {}".format(num_beacons))
+    def beacons(self):
+        msg = ["MESSAGE start"]
+        cells = [c for _,c in self.cells.items() if c.beacons > 0]
+        for cell in cells:
+            msg.append("BEACON {} {}".format(cell.id, cell.beacons))
+        msg.append("MESSAGE stop")
+        print(";".join(msg))
+
 
 # Auto-generated code below aims at helping you parse
 # the standard input according to the problem statement.
@@ -152,4 +159,4 @@ while True:
 
 
     # WAIT | LINE <sourceIdx> <targetIdx> <strength> | BEACON <cellIdx> <strength> | MESSAGE <text>
-    print("WAIT")
+    colony.beacons()
