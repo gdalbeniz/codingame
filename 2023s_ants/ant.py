@@ -36,6 +36,7 @@ class Cell:
         self.enemy = False
         self.dist = 999
         self.beacons = 0
+        self.crossroad = False
         #debug("cell neigh: {} {} {} {} {} {}".format(neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5))
     def update(self, resources, my_ants, opp_ants):
         self.resources, self.ants, self.bugs = resources, my_ants, opp_ants
@@ -47,7 +48,6 @@ class Cell:
     def place(self, beacons):
         if self.beacons < beacons:
             self.beacons = beacons
-        #debug("place {} {} {}".format(self.id, beacons, self.dist))
         if self.dist > 0:
             neigh = [n for n in self.neighbours if n.dist == self.neighbours[0].dist]
             neigh.sort(key=lambda x: x.dist*100 - x.beacons)
@@ -91,6 +91,7 @@ class Colony:
         self.num_ants = 0
         for _,cell in self.cells.items():
             cell.beacons = 0
+            cell.crossroad = False
     def calculate(self):
         # place beacons
         for cell in [c for _,c in self.cells.items() if c.resources > 0]:
@@ -103,14 +104,18 @@ class Colony:
         for cell in cells:
             num_beacons += cell.beacons
             debug("beacon {} #{} @{}".format(cell.id, cell.beacons, cell.dist))
-        #debug("beacons pre {}".format(num_beacons))
-        for cell in cells:
-            if num_beacons > self.num_ants:
-                diff = num_beacons - self.num_ants
-                if diff > cell.beacons:
-                    diff = cell.beacons
-                num_beacons -= diff
-                cell.beacons -= diff
+            # locate crossroads
+            neigh = [n for n in cell.neighbours if n.beacons > 0]
+            if len(neigh) > 2:
+                self.crossroad = True
+        # reduce beacons
+        #for cell in cells:
+        #    if num_beacons > self.num_ants:
+        #        diff = num_beacons - self.num_ants
+        #        if diff > cell.beacons:
+        #            diff = cell.beacons
+        #        num_beacons -= diff
+        #        cell.beacons -= diff
         #debug("beacons post {}".format(num_beacons))
     def beacons(self):
         cells = [c for _,c in self.cells.items() if c.beacons > 0]
