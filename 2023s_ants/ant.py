@@ -27,13 +27,15 @@ class Cell:
     def __init__(self, id, _type, initial_resources, neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5):
         self.id = id
         self.type = CellType(_type)
-        self.resources = initial_resources
+        self.resources = initial_resources if self.type == CellType.CRYSTAL else 0
+        self.eggs = initial_resources if self.type == CellType.EGG else 0
         self.neighbours = [neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5]
         self.ants = 0
         self.bugs = 0
         self.base = False
         self.enemy = False
         self.dist = 999
+        self.beacons = 0
         debug("cell neigh: {} {} {} {} {} {}".format(neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5))
     def update(self, resources, my_ants, opp_ants):
         self.resources, self.ants, self.bugs = resources, my_ants, opp_ants
@@ -42,17 +44,28 @@ class Cell:
         self.dist = 0
     def set_enemy(self):
         self.enemy = True
+    def place(self, beacons):
+        self.beacons = beacons
+        debug("place {} {} {}".format(self.id, beacons, self.dist))
+        if self.dist > 0:
+            neigh = [n for n in self.neighbours if n.dist == self.neighbours[0].dist]
+            neigh.sort(key=lambda x: x.dist*100 - x.beacons)
+            neigh[0].place(beacons)
 
 class Colony:
     def __init__(self, number_of_cells):
         self.cells = {}
         self.num_cells = number_of_cells
+        self.num_bases = 0
+        self.num_ants = 0
     def add(self, cell):
         self.cells[cell.id] = cell
     def update(self, id, resources, my_ants, opp_ants):
+        self.num_ants += my_ants
         self.cells[id].update(resources, my_ants, opp_ants)
     def set_base(self, id):
         self.cells[id].set_base()
+        self.num_bases += 1
     def set_enemy(self, id):
         self.cells[id].set_enemy()
     def process(self):
@@ -72,6 +85,33 @@ class Colony:
         for _,cell in self.cells.items():
             cell.neighbours.sort(key=lambda x: x.dist)
             #debug("proces {}: ({} {} {})".format(cell.id, cell.neighbours[0].dist, cell.neighbours[1].dist, cell.neighbours[2].dist))
+    def reset(self):
+        # reset beacons and ants
+        self.num_ants = 0
+        for _,cell in self.cells.items():
+            cell.beacons = 0
+    def calculate(self):
+        # place beacons
+        for cell in [c for _,c in self.cells.items() if c.resources > 0]:
+            debug(cell)
+            desired_beacons = cell.resources // (cell.dist + 1)
+            desired_ants = self.num_ants // (cell.dist + 1)
+            cell.place(min(desired_ants, desired_beacons))
+        # count beacons
+        num_beacons = 0
+        cells = [c for _,c in self.cells.items() if c.beacons > 0].sort(key=lambda x: -x.dist)
+        for cell in cells:
+            num_beacons += cell.beacons
+        
+        debug("beacons pre {}".format(num_beacons))
+        for cell in cells:
+            if num_beacons > self.num_ants:
+                diff = num_beacons - self.num_ants
+                if diff > cell.beacons:
+                    diff = cell.beacons
+                num_beacons -= diff
+                cell.beacons -= diff
+        debug("beacons post {}".format(num_beacons))
 
 # Auto-generated code below aims at helping you parse
 # the standard input according to the problem statement.
@@ -94,12 +134,18 @@ colony.process()
 
 # game loop
 while True:
+
+    colony.reset()
+
     for i in range(number_of_cells):
         # resources: the current amount of eggs/crystals on this cell
         # my_ants: the amount of your ants on this cell
         # opp_ants: the amount of opponent ants on this cell
         resources, my_ants, opp_ants = [int(j) for j in input().split()]
         colony.update(i, resources, my_ants, opp_ants)
+
+    # Calculate beacons
+    colony.calculate()
 
     # Write an action using print
     # To debug: print("Debug messages...", file=sys.stderr, flush=True)
