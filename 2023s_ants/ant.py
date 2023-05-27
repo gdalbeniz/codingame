@@ -27,7 +27,7 @@ class Cell:
     def __init__(self, id, _type, initial_resources, neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5):
         self.id = id
         self.type = CellType(_type)
-        self.resources = initial_resources if self.type == CellType.CRYSTAL else 0
+        self.crystals = initial_resources if self.type == CellType.CRYSTAL else 0
         self.eggs = initial_resources if self.type == CellType.EGG else 0
         self.neighbours = [neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5]
         self.ants = 0
@@ -39,7 +39,10 @@ class Cell:
         self.crossroad = False
         #debug("cell neigh: {} {} {} {} {} {}".format(neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5))
     def update(self, resources, my_ants, opp_ants):
-        self.resources, self.ants, self.bugs = resources, my_ants, opp_ants
+        self.crystals = resources if self.type == CellType.CRYSTAL else 0
+        self.eggs = resources if self.type == CellType.EGG else 0
+        self.ants = my_ants
+        self.bugs = opp_ants
     def set_base(self):
         self.base = True
         self.dist = 0
@@ -94,9 +97,9 @@ class Colony:
             cell.crossroad = False
     def calculate(self):
         # place beacons
-        for cell in [c for _,c in self.cells.items() if c.resources > 0]:
+        for cell in [c for _,c in self.cells.items() if c.crystals > 0 or c.eggs > 0]:
             desired_beacons = self.num_ants // (cell.dist + 1)
-            cell.place(min(cell.resources, desired_beacons))
+            cell.place(min(desired_beacons, max(cell.crystals, cell.eggs)))
         # count beacons
         num_beacons = 0
         cells = [c for _,c in self.cells.items() if c.beacons > 0]
@@ -109,14 +112,15 @@ class Colony:
             if len(neigh) > 2:
                 self.crossroad = True
         # reduce beacons
-        #for cell in cells:
-        #    if num_beacons > self.num_ants:
-        #        diff = num_beacons - self.num_ants
-        #        if diff > cell.beacons:
-        #            diff = cell.beacons
-        #        num_beacons -= diff
-        #        cell.beacons -= diff
-        #debug("beacons post {}".format(num_beacons))
+        for cell in cells:
+            if cell.dist > turn:
+                cell.beacons = 0
+            #if num_beacons > self.num_ants:
+            #    diff = num_beacons - self.num_ants
+            #    if diff > cell.beacons:
+            #        diff = cell.beacons
+            #    num_beacons -= diff
+            #    cell.beacons -= diff
     def beacons(self):
         cells = [c for _,c in self.cells.items() if c.beacons > 0]
         msg = []
@@ -145,7 +149,9 @@ for i in input().split():
 colony.process()
 
 # game loop
+turn = 0
 while True:
+    turn += 1
 
     colony.reset()
 
@@ -165,3 +171,4 @@ while True:
 
     # WAIT | LINE <sourceIdx> <targetIdx> <strength> | BEACON <cellIdx> <strength> | MESSAGE <text>
     colony.beacons()
+
