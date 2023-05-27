@@ -36,7 +36,7 @@ class Cell:
         self.enemy = False
         self.dist = 999
         self.beacons = 0
-        debug("cell neigh: {} {} {} {} {} {}".format(neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5))
+        #debug("cell neigh: {} {} {} {} {} {}".format(neigh_0, neigh_1, neigh_2, neigh_3, neigh_4, neigh_5))
     def update(self, resources, my_ants, opp_ants):
         self.resources, self.ants, self.bugs = resources, my_ants, opp_ants
     def set_base(self):
@@ -45,8 +45,9 @@ class Cell:
     def set_enemy(self):
         self.enemy = True
     def place(self, beacons):
-        self.beacons = beacons
-        debug("place {} {} {}".format(self.id, beacons, self.dist))
+        if self.beacons < beacons:
+            self.beacons = beacons
+        #debug("place {} {} {}".format(self.id, beacons, self.dist))
         if self.dist > 0:
             neigh = [n for n in self.neighbours if n.dist == self.neighbours[0].dist]
             neigh.sort(key=lambda x: x.dist*100 - x.beacons)
@@ -101,7 +102,7 @@ class Colony:
         cells.sort(key=lambda x: -x.dist)
         for cell in cells:
             num_beacons += cell.beacons
-        
+            debug("beacon {} #{} @{}".format(cell.id, cell.beacons, cell.dist))
         #debug("beacons pre {}".format(num_beacons))
         for cell in cells:
             if num_beacons > self.num_ants:
@@ -112,11 +113,10 @@ class Colony:
                 cell.beacons -= diff
         #debug("beacons post {}".format(num_beacons))
     def beacons(self):
-        msg = ["MESSAGE start"]
         cells = [c for _,c in self.cells.items() if c.beacons > 0]
+        msg = []
         for cell in cells:
             msg.append("BEACON {} {}".format(cell.id, cell.beacons))
-        msg.append("MESSAGE stop")
         print(";".join(msg))
 
 
