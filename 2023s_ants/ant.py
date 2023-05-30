@@ -62,11 +62,21 @@ class Colony:
         self.num_cells = number_of_cells
         self.num_bases = 0
         self.num_ants = 0
+        self.num_bugs = 0
+        self.num_crystals = 0
+        self.num_eggs = 0
+        self.eggs2crys = 100
     def add(self, cell):
         self.cells[cell.id] = cell
     def update(self, id, resources, my_ants, opp_ants):
-        self.num_ants += my_ants
         self.cells[id].update(resources, my_ants, opp_ants)
+        # count things
+        self.num_ants += my_ants
+        self.num_bugs += opp_ants
+        if self.cells[id].type == CellType.CRYSTAL:
+            self.num_crystals += resources
+        else:
+            self.num_eggs += resources
     def set_base(self, id):
         self.cells[id].set_base()
         self.num_bases += 1
@@ -92,10 +102,14 @@ class Colony:
     def reset(self):
         # reset beacons and ants
         self.num_ants = 0
+        self.num_bugs = 0
+        self.num_crystals = 0
+        self.num_eggs = 0
         for _,cell in self.cells.items():
             cell.beacons = 0
             cell.crossroad = False
     def calculate(self):
+        debug("a {} b {} c {} e {}".format(self.num_ants, self.num_bugs, self.num_crystals, self.num_eggs))
         # place beacons
         for cell in [c for _,c in self.cells.items() if c.crystals > 0 or c.eggs > 0]:
             desired_beacons = self.num_ants // (cell.dist + 1)
