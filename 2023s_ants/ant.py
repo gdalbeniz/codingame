@@ -68,6 +68,13 @@ class Colony:
         self.eggs2crys = 100
     def add(self, cell):
         self.cells[cell.id] = cell
+        # count things
+        self.num_ants += my_ants
+        self.num_bugs += opp_ants
+        if self.cells[id].type == CellType.CRYSTAL:
+            self.num_crystals += resources
+        else:
+            self.num_eggs += resources
     def update(self, id, resources, my_ants, opp_ants):
         self.cells[id].update(resources, my_ants, opp_ants)
         # count things
@@ -127,7 +134,7 @@ class Colony:
                 self.crossroad = True
         # reduce beacons
         for cell in cells:
-            if cell.dist > turn:
+            if cell.dist > turn*3/4:
                 cell.beacons = 0
             #if num_beacons > self.num_ants:
             #    diff = num_beacons - self.num_ants
